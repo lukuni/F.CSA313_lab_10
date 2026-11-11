@@ -1,0 +1,8 @@
+openjdk version "27" 2026-09-15
+OpenJDK Runtime Environment Homebrew (build 27)
+OpenJDK 64-Bit Server VM Homebrew (build 27, mixed mode, sharing)
+Apache Maven 3.9.16 (2bdd9fddda4b155ebf8000e807eb73fd829a51d5)
+Maven home: /opt/homebrew/Cellar/maven/3.9.16/libexec
+Java version: 27, vendor: Homebrew, runtime: /opt/homebrew/Cellar/openjdk/27/libexec/openjdk.jdk/Contents/Home
+Default locale: en_MN, platform encoding: UTF-8
+OS name: "mac os x", version: "26.1", arch: "aarch64", family: "mac"
