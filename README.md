@@ -1,5 +1,22 @@
 # Lab 10 – Data-flow testing (DU pairs)
 
+Name: Oyumaa Chimeddagva  
+Student ID: B232270133
+
+## Environment
+```
+$ java -version
+openjdk version "27" 2026-09-15
+OpenJDK Runtime Environment Homebrew (build 27)
+OpenJDK 64-Bit Server VM Homebrew (build 27, mixed mode, sharing)
+$ mvn -version
+Apache Maven 3.9.16 (2bdd9fddda4b155ebf8000e807eb73fd829a51d5)
+Maven home: /opt/homebrew/Cellar/maven/3.9.16/libexec
+Java version: 27, vendor: Homebrew, runtime: /opt/homebrew/Cellar/openjdk/27/libexec/openjdk.jdk/Contents/Home
+Default locale: en_MN, platform encoding: UTF-8
+OS name: "mac os x", version: "26.1", arch: "aarch64", family: "mac"
+```
+
 ## Part A – gcd (lines 13–20)
 
 | # | Var | Def | Use | Type | Def-clear path | Test ID | Covered |
@@ -121,3 +138,60 @@ Line 50 runs only once per call: if it is true, line 51 overwrites line 49 befor
 if it is false, line 51 never runs. So no single execution can take BOTH score defs to a use,
 and we need at least 2 tests: AD1 (present ≥ threshold → def 51) and AD2 (present < threshold → def 49).
 AD1 alone covers all other defs (present 35/40, streak 36/41/46, best 37/43, a 38, score 51/54).
+
+### B5 – JaCoCo: branch vs DU coverage
+| Stage | Tests run | BRANCH missed / covered | LINE missed / covered | File |
+|-------|-----------|--------------------------|------------------------|------|
+| all-defs | 4 | 2 / 14 | 2 / 22 | results/jacoco-alldefs.csv, results/mvn-verify-alldefs.txt |
+| final | 10 | 0 / 16 | 1 / 23 | results/jacoco-final.csv, results/mvn-verify-final.txt |
+
+- LINE_MISSED = 1 in the final report is line 7, the implicit default constructor `DataFlowTargets()`.
+- **all-defs satisfied but branch < 100%?** Yes. With only AD1 and AD2, all 13 defs reach a use,
+  but the two TRUE branches on line 32 (`attendance == null`, `threshold < 0`) and line 33 are never executed (14/16).
+- **Branch 100% but DU pairs still uncovered?** Yes. The set {AD1, AD2, DU1, DU2} gives 16/16 branches,
+  but misses 5 DU pairs: #10 present(35,(50,T)), #14 present(40,(50,F)), #28 best(43,(53,F)),
+  #31 score(49,54), #34 score(51,56). For example, #31 needs line 50 FALSE **and** line 53 TRUE in the SAME run;
+  branch coverage only needs each branch once, in any test. The same happens in gcd: gcd(8,4) alone covers both
+  branches of line 15, but runs the loop only once, so x(17→16), y(18→15T), y(18→16), y(18→17) stay uncovered.
+  → Branch coverage does NOT imply all-DU-pairs coverage.
+
+## Part C – Fault seeding
+
+| Mutation | Type | Result file | Tests run / Failures | Failed test: message | Result |
+|----------|------|-------------|----------------------|----------------------|--------|
+| M1: delete line 41 `streak = streak + 1;` | missing update | results/mvn-test-M1.txt | 9 / 2 | `allDefs_brokenThenLongStreak: expected: <8> but was: <5>`; `du_longStreakBelowThreshold: expected: <3> but was: <0>` | killed |
+| M2: line 43 `best = streak;` → `best = present;` | wrong variable | results/mvn-test-M2.txt | 9 / 0 | – | **survived** |
+| M2 + new test | | results/mvn-test-M2-kill.txt | 10 / 1 | `m2_absenceBeforeLongestStreak: expected: <5> but was: <8>` | killed |
+| M3: `int total = present + best;` after the loop | dead definition | results/mvn-test-M3.txt | 10 / 0 | – | survived (cannot be killed by tests) |
+
+**M1:** without line 41 `streak` stays 0, so `streak > best` (42) is never true, `best` stays 0 and the +3 is never added.
+
+**M2 – why it survived although all 33 DU pairs were covered:** at the moment `best` is updated (line 43),
+`present == streak` unless there was an absence earlier. In DU3–DU5 there is no absence before the streak,
+so `present` and `streak` are equal. In AD1 ({1,0,1,1,1,1,1}) they differ, but the mutant's final best is still 5,
+the same side of the `best >= 5` check, so the score (8) does not change. DU coverage only guarantees that
+each def→use path is executed, not that a wrong value changes the output.
+**Kill test** `BonusM2KillTest.m2_absenceBeforeLongestStreak`: {1,1,0,1,1,1}, threshold 1. The real longest
+streak is 3 → score 5. The mutant sets best = present = 5 on day 6 → 5 + 3 = 8.
+
+**M3 – why no test fails:** `total` is defined but never used, so it has no DU pair and cannot affect the output.
+javac does not warn about unused local variables. A static analysis tool catches it: IDE inspections,
+SonarLint, PMD (`UnusedLocalVariable`), SpotBugs (`DLS_DEAD_LOCAL_STORE`).
+IDE warning (VS Code, Java extension), line 49 of the mutated file:
+`The value of the local variable total is not used` – Java(536870973)
+
+## Conclusion
+DU analysis is stronger than branch coverage because it requires a def and its use to happen in the same run
+along a def-clear path, so it finds combinations (like score 49→54) that branch coverage can skip.
+It also makes loop-carried pairs visible, which forced the second loop iteration in gcd(12,8).
+It is more expensive: JaCoCo cannot measure DU coverage, so the CFG, the def/use list and the 35-row table
+had to be built and checked by hand, including kills and infeasible pairs.
+Even all-DU-pairs is not enough to catch every fault: M2 survived because the wrong value did not change the output,
+and M3 can only be found by static analysis.
+The step that took the most time was the bonus DU table (B3) together with getting the two-stage commits
+and JaCoCo results right (JaCoCo appends to target/jacoco.exec, so `mvn clean verify` is needed for correct numbers).
+
+## AI use
+An AI assistant (Claude) was used for step-by-step guidance, for drafting the DU tables and README text,
+for choosing test inputs, and for generating cfg-bonus.png with Graphviz.
+All numbers in this README were copied from the files in results/.
